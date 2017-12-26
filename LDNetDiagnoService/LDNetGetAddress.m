@@ -18,6 +18,9 @@
 #import <sys/sysctl.h>
 #import <netinet/in.h>
 
+#import <CoreTelephony/CTTelephonyNetworkInfo.h>
+#import <SystemConfiguration/SystemConfiguration.h>
+
 #include "Route.h"
 
 #define ROUNDUP(a) ((a) > 0 ? (1 + (((a)-1) | (sizeof(long) - 1))) : sizeof(long))
@@ -323,23 +326,51 @@
 
 /*!
  * 获取当前网络类型
- * 通过statusBar的网络subview获取具体类型
  */
 + (NETWORK_TYPE)getNetworkTypeFromStatusBar
 {
-    NSArray *subviews = [[[[UIApplication sharedApplication] valueForKey:@"statusBar"]
-        valueForKey:@"foregroundView"] subviews];
-    NSNumber *dataNetworkItemView = nil;
-    for (id subview in subviews) {
-        if ([subview isKindOfClass:[NSClassFromString(@"UIStatusBarDataNetworkItemView") class]]) {
-            dataNetworkItemView = subview;
-            break;
-        }
+    SCNetworkReachabilityRef reachability = SCNetworkReachabilityCreateWithName(NULL, "8.8.8.8");
+    SCNetworkReachabilityFlags flags;
+    BOOL success = SCNetworkReachabilityGetFlags(reachability, &flags);
+    CFRelease(reachability);
+    if (!success) {
+        return NETWORK_TYPE_NONE;
     }
-    NETWORK_TYPE nettype = NETWORK_TYPE_NONE;
-    NSNumber *num = [dataNetworkItemView valueForKey:@"dataNetworkType"];
-    nettype = [num intValue];
-    return nettype;
+    BOOL isReachable = ((flags & kSCNetworkReachabilityFlagsReachable) != 0);
+    BOOL needsConnection = ((flags & kSCNetworkReachabilityFlagsConnectionRequired) != 0);
+    BOOL isNetworkReachable = (isReachable && !needsConnection);
+
+    if (!isNetworkReachable) {
+        return NETWORK_TYPE_NONE;
+    } else if ((flags & kSCNetworkReachabilityFlagsIsWWAN) != 0) {
+        NSString *networkType = [CTTelephonyNetworkInfo new].currentRadioAccessTechnology;
+        if ([networkType isEqual:@"CTRadioAccessTechnologyGPRS"]) {
+            return NETWORK_TYPE_2G;
+        } else if ([networkType isEqual:@"CTRadioAccessTechnologyEdge"]) {
+            return NETWORK_TYPE_2G;
+        } else if ([networkType isEqual:@"CTRadioAccessTechnologyWCDMA"]) {
+            return NETWORK_TYPE_3G;
+        } else if ([networkType isEqual:@"CTRadioAccessTechnologyHSDPA"]) {
+            return NETWORK_TYPE_3G;
+        } else if ([networkType isEqual:@"CTRadioAccessTechnologyHSUPA"]) {
+            return NETWORK_TYPE_3G;
+        } else if ([networkType isEqual:@"CTRadioAccessTechnologyCDMA1"]) {
+            return NETWORK_TYPE_3G;
+        } else if ([networkType isEqual:@"CTRadioAccessTechnologyCDMAEVDORev0"]) {
+            return NETWORK_TYPE_3G;
+        } else if ([networkType isEqual:@"CTRadioAccessTechnologyCDMAEVDORevA"]) {
+            return NETWORK_TYPE_3G;
+        } else if ([networkType isEqual:@"CTRadioAccessTechnologyCDMAEVDORevB"]) {
+            return NETWORK_TYPE_3G;
+        } else if ([networkType isEqual:@"CTRadioAccessTechnologyeHRPD"]) {
+            return NETWORK_TYPE_4G;
+        } else if ([networkType isEqual:@"CTRadioAccessTechnologyLTE"]) {
+            return NETWORK_TYPE_4G;
+        }
+        return NETWORK_TYPE_3G;
+    } else {
+        return NETWORK_TYPE_WIFI;
+    }
 }
 
 
